@@ -8,6 +8,7 @@ docs/callgraphs2/*
 CLAUDE.md
 .vscode
 .claude
+scripts/maintainer/
 .spec-workflow
 VALIDATION.md
 # dev/
@@ -21,7 +22,7 @@ prompt_templates/__pycache__/
 data/spam_email/playground/*
 /valid*.py
 /valid*
-!VALIDATION.md
+
 tmp_*
 docs/call_graphs/*
 docs/callgraph_generator/*

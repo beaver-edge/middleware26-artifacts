@@ -7,7 +7,7 @@
 #   ./build-image.sh --platform linux/amd64   extra arguments are passed to docker build
 #
 # Supported: linux/amd64 and linux/arm64. Build natively; the Arduino CLI has
-# crashed under cross-architecture emulation (see VALIDATION.md).
+# crashed under cross-architecture emulation.
 set -euo pipefail
 cd "$(dirname "$0")"
 tag="beaver-edge-artifact:middleware26"   # the tag ./run-artifact.sh --local-image expects

@@ -18,6 +18,10 @@ from base.base_processor import BaseProcessor
 from base.prompt_template import PromptTemplate
 
 
+class DataProcessorError(Exception):
+    """Stops the workflow; the outcome is already recorded when it is raised."""
+
+
 class DataProcessor(BaseProcessor):
     """
     DataProcessor is responsible for processing datasets by generating and executing
@@ -147,7 +151,9 @@ class DataProcessor(BaseProcessor):
         self.logger.error(self.get_session_id()+ error_message)
         self.log_error( Exception(error_message) )
         self.record.update(output={"status": "failed", "last_error": error_message})
-        sys.exit(1)
+        # Raise instead of sys.exit so run() returns and main.py can record the
+        # outcome: an exhausted repair budget is an expected result, not a crash.
+        raise DataProcessorError(error_message)
 
 
     def generate_processing_suggestions(self, max_retries):
@@ -234,7 +240,7 @@ class DataProcessor(BaseProcessor):
                 error = str(e)
                 if attempt == max_retries:
                     error_message = (
-                        "Failed to generate valid suggestion table after "
+                        "Failed to generate valid suggestion table after the max "
                         f"{max_retries} attempts. Last error: {error}"
                     )
                     self.raise_data_processor_error(error_message)
@@ -343,6 +349,8 @@ class DataProcessor(BaseProcessor):
                     error_message = f"Failed to generate valid code after the max {max_retries} attempts. Last error from code execution: {error}"  
                     self.raise_data_processor_error(error_message)
                     
+            except DataProcessorError:
+                raise
             except Exception as e:
                 error = str(e)
                 if "CUDA error" in error:
@@ -525,6 +533,8 @@ class DataProcessor(BaseProcessor):
             self.log_error(e)
             self.record.update(output={"status": "failed", "last_error": str(e)})
             raise 
+        except DataProcessorError:
+            pass  # already logged and recorded by raise_data_processor_error
         except Exception as e:
             # Handle unexpected errors
             self.logger.error(

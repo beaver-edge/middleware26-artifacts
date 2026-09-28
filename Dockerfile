@@ -33,7 +33,7 @@ COPY src/ src/
 COPY tests/ tests/
 COPY scripts/ scripts/
 COPY inputs/ inputs/
-COPY README.md VALIDATION.md example.env ./
+COPY README.md example.env ./
 RUN mkdir -p logs tmp work/data work/convert work/ardsketch \
     work/pysketch/generated work/tpusketch/generated \
     && python -m pip check

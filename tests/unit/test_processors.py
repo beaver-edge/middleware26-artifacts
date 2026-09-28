@@ -107,6 +107,36 @@ def test_data_processor_operation_generation_success(fake_llm, monkeypatch):
     assert processor.generate_operation_code(max_retries=1) is None
 
 
+def test_data_processor_exhausted_repair_budget_is_expected_outcome(fake_llm, monkeypatch):
+    # Regression: sys.exit(1) used to bypass main.py, so an exhausted budget
+    # (an expected outcome) was reported as a system failure.
+    from processors.data_processor import DataProcessorError
+    import src.main as main
+
+    processor = make_processor(DataProcessor, fake_llm, monkeypatch)
+    processor.current_operation = {"operation": "split", "explanation": "split data"}
+    processor.dataset_summary_str = "summary"
+    monkeypatch.setattr(processor, "execute_code", lambda code, workspace, **kwargs: "KeyError: 'Fruit'")
+    with pytest.raises(DataProcessorError):
+        processor.generate_operation_code(max_retries=2)
+
+    monkeypatch.setattr(processor, "get_user_input", lambda: None)
+
+    def one_suggestion(max_retries):
+        processor.processing_suggestions = {"split": "split data"}
+        processor.total_operation_count = 1
+
+    monkeypatch.setattr(processor, "generate_processing_suggestions", one_suggestion)
+    processor.run()  # must return instead of exiting the interpreter
+    outcome = processor.record.output["output"]
+    assert outcome["status"] == "failed"
+    assert "max 5 attempts" in outcome["last_error"]
+    normalized = main.normalize_outcome(outcome)
+    assert normalized["execution_status"] == "completed"
+    assert normalized["artifact_status"] == "not_generated"
+    assert normalized["termination"] == "retry_budget_exhausted"
+
+
 def test_model_converter_user_input_and_templates(fake_llm, monkeypatch):
     processor = make_processor(ModelConverter, fake_llm, monkeypatch)
     processor.get_user_input()
