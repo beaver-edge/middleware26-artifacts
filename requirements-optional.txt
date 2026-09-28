@@ -1,0 +1,9 @@
+# Task runtimes installed in the artifact container.
+numpy==1.26.4
+scikit-learn==1.6.1
+scipy==1.15.2
+matplotlib==3.10.1
+# The supplied .keras model was saved with Keras 2.15.0.
+tensorflow==2.15.1
+ai-edge-litert==1.2.0
+opencv-python-headless==4.11.0.86
