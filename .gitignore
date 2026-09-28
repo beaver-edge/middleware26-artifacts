@@ -8,7 +8,6 @@ docs/callgraphs2/*
 CLAUDE.md
 .vscode
 .claude
-scripts/maintainer/
 .spec-workflow
 VALIDATION.md
 # dev/
