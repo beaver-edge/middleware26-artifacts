@@ -30,7 +30,7 @@ To use your own API key instead, run `cp example.env .env` and fill in the `OPEN
 ## Quick start
 
 ```bash
-./run-artifact.sh        # enter the password from HotCRP when asked
+./run-artifact.sh        # enter the password from HotCRP submission when asked
 ```
 
 This pulls the prebuilt image, unpacks the credentials, and runs all checks and all five tasks, including TPU-SG on our Coral board.
