@@ -1,8 +1,8 @@
 #!/usr/bin/env bash
-# Runs INSIDE the container (TPU-SG only), after setup-ssh-and-run-task.sh has
+# Runs INSIDE the container (Py-TPU only), after setup-ssh-and-run-task.sh has
 # installed the evaluation SSH files. Read-only preflight of the Coral board:
-# it proves that the exact SSH/SCP path TPU-SG uses works, and that the board
-# has the runtime and inputs TPU-SG expects. The only write is a probe file in
+# it proves that the exact SSH/SCP path Py-TPU uses works, and that the board
+# has the runtime and inputs Py-TPU expects. The only write is a probe file in
 # REMOTE_EXEC_PATH, which is removed again. Exit 0 = board ready.
 set -uo pipefail
 cd /artifact

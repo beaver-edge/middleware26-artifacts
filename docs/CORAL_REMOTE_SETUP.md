@@ -251,7 +251,7 @@ From the repository root on the host:
 ./run-artifact.sh --tpu /absolute/path/to/evaluation-ssh tpusketch
 ```
 
-Omit `tpusketch` to run TPU-SG after the four local tasks. The SSH directory is
+Omit `tpusketch` to run Py-TPU after the four local tasks. The SSH directory is
 mounted read-only, and `scripts/container/setup-ssh-and-run-task.sh` copies the
 needed files into the ephemeral container layer only. Evidence is written to
 `artifact-runs/<timestamp>/tpusketch/`.

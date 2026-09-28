@@ -1,11 +1,11 @@
 #!/usr/bin/env bash
 # BEAVER-EDGE artifact evaluation — the single entry point for reviewers.
 #
-#   ./run-artifact.sh                      pull image, self-test, API check, DP/MC/ArdSG/CPU-SG,
-#                                          plus TPU-SG on the authors' Coral board when eval-ssh/ exists
+#   ./run-artifact.sh                      pull image, self-test, API check, DP/MC/ArdSG/Py-CPU,
+#                                          plus Py-TPU on the authors' Coral board when eval-ssh/ exists
 #   ./run-artifact.sh data convert         run only the listed tasks (after the checks)
-#   ./run-artifact.sh --no-tpu             skip TPU-SG even when board access is available
-#   ./run-artifact.sh --tpu DIR            use another SSH directory for TPU-SG (e.g. your own board)
+#   ./run-artifact.sh --no-tpu             skip Py-TPU even when board access is available
+#   ./run-artifact.sh --tpu DIR            use another SSH directory for Py-TPU (e.g. your own board)
 #   ./run-artifact.sh --local-image        use the image built by ./build-image.sh
 #
 # Credentials: when .env is missing and credentials.tar.gz.enc is present, the
@@ -75,8 +75,8 @@ task_label() {
         data) echo "DP (data)" ;;
         convert) echo "MC (convert)" ;;
         ardsketch) echo "ArdSG (ardsketch)" ;;
-        pysketch) echo "CPU-SG (pysketch)" ;;
-        tpusketch) echo "TPU-SG (tpusketch)" ;;
+        pysketch) echo "Py-CPU (pysketch)" ;;
+        tpusketch) echo "Py-TPU (tpusketch)" ;;
     esac
 }
 finish() {
@@ -163,7 +163,7 @@ if [[ ${#tasks[@]} -eq 0 ]]; then
 fi
 for task in "${tasks[@]}"; do
     if [[ $task == tpusketch && -z $ssh_dir ]]; then
-        record "0 credentials" FAIL "TPU-SG needs board access: eval-ssh/ or --tpu DIR"
+        record "0 credentials" FAIL "Py-TPU needs board access: eval-ssh/ or --tpu DIR"
         finish
     fi
 done
@@ -189,7 +189,7 @@ else
     finish
 fi
 
-# ---------------------------------------------------------------- 2b. board preflight (TPU-SG only)
+# ---------------------------------------------------------------- 2b. board preflight (Py-TPU only)
 if [[ " ${tasks[*]} " == *" tpusketch "* ]]; then
     docker run --rm -v "$ROOT/.env:/artifact/.env:ro" -v "$ssh_dir:/run/evaluation-ssh:ro" "$image" \
         bash scripts/container/setup-ssh-and-run-task.sh --check-board > "$out/2b-board-check.log" 2>&1

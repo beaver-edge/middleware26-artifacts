@@ -83,7 +83,7 @@ EOF
     # port-forwarding also re-enables -R, so permitlisten pins it to privileged port 1, which a
     # non-root user cannot bind (sshd rejects the whole key for permitlisten="none").
     echo "restrict,port-forwarding,permitlisten=\"127.0.0.1:1\",permitopen=\"$board_host:22\",command=\"/bin/false\" $pub $tag" > "$dir/install/authorized_keys.jump"
-    # Board: normal command execution + SCP (TPU-SG needs both), only when coming from the jump host.
+    # Board: normal command execution + SCP (Py-TPU needs both), only when coming from the jump host.
     echo "restrict,from=\"$board_sees\" $pub $tag" > "$dir/install/authorized_keys.board"
     printf 'JUMP_ALIAS=%q\nBOARD_ALIAS=%q\n' "$jump" "$board" > "$dir/install/meta"
     echo
