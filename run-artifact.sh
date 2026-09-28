@@ -21,8 +21,7 @@ set -uo pipefail
 cd "$(dirname "$0")"
 ROOT=$(pwd)
 
-# TODO(before submission): replace with the published Docker Hub image, ideally pinned by digest.
-PUBLISHED_IMAGE="noahwu/beaver-edge:middleware26"
+PUBLISHED_IMAGE="noahwu/beaver-edge:middleware26@sha256:a317b940a493e208ee3d30893344317d6a5fff85603f299e5b4ca17d67caf5c6"
 LOCAL_IMAGE="beaver-edge-artifact:middleware26"   # tag produced by ./build-image.sh
 SEALED_CREDENTIALS=credentials.tar.gz.enc          # made by scripts/maintainer/eval-access.sh seal
 
