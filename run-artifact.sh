@@ -20,15 +20,33 @@
 # RESULT judges what the LLM generated; FRAMEWORK judges BEAVER-EDGE itself.
 # Exit status: 0 = every task PASS and FRAMEWORK OK; 3 = FRAMEWORK OK but at least
 # one task FAIL; 1 = a check failed or FRAMEWORK ERROR; 2 = usage error.
+
+# Re-run under bash when another shell started this script, e.g. `sh run-artifact.sh`
+# (sh is dash on Debian/Ubuntu and cannot parse the arrays below). Keep this block
+# POSIX sh and above every bash-only construct; it also keeps usage()'s line range valid.
+if [ -z "${BASH_VERSION:-}" ]; then
+    if command -v bash >/dev/null 2>&1; then
+        exec bash "$0" "$@"
+    fi
+    echo "run-artifact.sh needs bash, which was not found on PATH." >&2
+    exit 2
+fi
+
 set -uo pipefail
 cd "$(dirname "$0")"
 ROOT=$(pwd)
+
+# Git Bash (MSYS) would rewrite container paths such as /artifact/.env in the -v arguments.
+export MSYS_NO_PATHCONV=1
+case "$(uname -s 2>/dev/null)" in
+    MINGW*|MSYS*|CYGWIN*) echo "Note: Git Bash/MSYS detected. If the container mounts fail, run this script from WSL 2." >&2 ;;
+esac
 
 PUBLISHED_IMAGE="noahwu/beaver-edge:middleware26@sha256:a317b940a493e208ee3d30893344317d6a5fff85603f299e5b4ca17d67caf5c6"
 LOCAL_IMAGE="beaver-edge-artifact:middleware26"   # tag produced by ./build-image.sh
 SEALED_CREDENTIALS=credentials.tar.gz.enc          # made by scripts/maintainer/eval-access.sh seal
 
-usage() { sed -n '2,22p' "$0" | sed 's/^# \{0,1\}//'; }
+usage() { sed -n '2,22p' "$ROOT/${0##*/}" | sed 's/^# \{0,1\}//'; }   # $0 may be relative to the pre-cd directory
 
 image=${BEAVER_EDGE_IMAGE:-$PUBLISHED_IMAGE}
 use_local=0
@@ -144,8 +162,15 @@ echo "BEAVER-EDGE artifact evaluation - image=$image provider=$provider"
 echo "Evidence directory: $out"
 
 # ---------------------------------------------------------------- 0. setup
-if ! command -v docker >/dev/null 2>&1 || ! docker info >/dev/null 2>&1; then
-    record "0 setup" FAIL - "Docker is not installed or its daemon is not running"
+if ! command -v docker >/dev/null 2>&1; then
+    record "0 setup" FAIL - "Docker is not installed - see https://docs.docker.com/get-docker/"
+    finish
+elif ! docker info >/dev/null 2> "$out/0-setup.log"; then
+    if grep -qi "permission denied" "$out/0-setup.log"; then
+        record "0 setup" FAIL - "this user cannot use the Docker daemon - on Linux, add it to the docker group and log in again (see 0-setup.log)"
+    else
+        record "0 setup" FAIL - "the Docker daemon is not reachable - start Docker Desktop or the docker service (see 0-setup.log)"
+    fi
     finish
 fi
 if [[ $use_local -eq 1 ]]; then

@@ -1,0 +1,12 @@
+# Scripts and config are executed on Linux inside the container: keep LF line
+# endings on every platform, so a Windows checkout (core.autocrlf) cannot turn
+# "#!/usr/bin/env bash" into "bash\r" and break the scripts or the image.
+*.sh        text eol=lf
+*.py        text eol=lf
+*.yml       text eol=lf
+Dockerfile  text eol=lf
+*.env       text eol=lf
+
+# The sealed credentials and the vendored library are binary.
+*.enc       binary
+*.gz        binary
