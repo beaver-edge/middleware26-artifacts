@@ -120,7 +120,7 @@ class BaseProcessor(ABC):
         task_names = {
             "data_processor": "data",
             "model_converter": "convert",
-            "arduino_sketch_generator": "ardsketch",
+            "ard_sketch_generator": "ardsketch",  # ArduinoSketchGenerator.get_task_name()
             "python_sketch_generator": "pysketch",
             "tpu_sketch_generator": "tpusketch",
         }
