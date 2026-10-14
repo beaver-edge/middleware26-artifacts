@@ -6,8 +6,9 @@
 # Each task appends one line to logs/status.log:
 #   COMPLETE <task> exit=0 artifact_status=<generated|not_generated> ...
 #   ERROR    <task> exit=<n> artifact_status=<...|unknown> ...
-# COMPLETE covers both a validated artifact and an exhausted repair budget;
-# only ERROR (an unexpected framework failure) is an evaluation failure.
+# COMPLETE/ERROR is the FRAMEWORK verdict: COMPLETE means the framework ran the
+# task to a recorded, verified outcome; ERROR means it did not. The TASK verdict
+# is artifact_status: generated = PASS, not_generated = FAIL (repair budget exhausted).
 set -uo pipefail
 cd /artifact
 provider=openrouter

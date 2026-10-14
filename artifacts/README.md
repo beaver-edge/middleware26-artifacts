@@ -22,7 +22,11 @@ artifacts/<task>/<session>/run-<number>-<trace-id>/
 ```
 
 Arduino candidates use `.ino`. A run may have only `valid/` when its first
-candidate passes, or only `invalid/` when all generated candidates fail.
+candidate passes, or only `invalid/` when all generated candidates fail. A DP
+run can have both, because DP validates one operation at a time. The task
+RESULT is FAIL whenever the `outcome` in `manifest.json` has
+`"artifact_status": "not_generated"`. An attempt whose LLM response contains no
+code block produces no candidate; its error appears only in `workflow.log`.
 
 The distinction is deliberately redundant:
 
@@ -33,7 +37,7 @@ The distinction is deliberately redundant:
 - `manifest.json` records the validation result, attempt label, executor,
   command/return code, error, and exact local path for every candidate.
 
-For TPUSG, both failed and successful remotely executed scripts are classified
+For Py-TPU, both failed and successful remotely executed scripts are classified
 in this local tree. A successful board-side output video is copied back into the
 run's `outputs/valid/` directory. A fresh partial output left by a failed local
 or TPU attempt is retained under `outputs/invalid/`. The framework clears the

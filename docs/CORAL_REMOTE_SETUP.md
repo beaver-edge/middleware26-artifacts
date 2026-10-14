@@ -1,10 +1,10 @@
-# Remote Coral Dev Board setup for BEAVER-EDGE TPUSG
+# Remote Coral Dev Board setup for BEAVER-EDGE Py-TPU
 > If you want to use own Coral Dev Board to work directly with existing BEAVER-EDGE workflow w/ or w/o docker container, this is a guide to set it up. 
 
 
 This document describes the board-side requirements for the repository's TPU Python Sketch Generation (`tpusketch`) workflow. It is specific to the original Google Coral Dev Board (Mendel Linux), not the Dev Board Micro or a host using a USB/M.2 accelerator.
 
-The framework does not provision the board. It generates a Python script in the artifact container, copies it to the board with SCP, executes it over SSH, and deletes the remote script afterward. The model, labels, input video, Python runtime, and Edge TPU runtime must therefore exist before TPUSG starts.
+The framework does not provision the board. It generates a Python script in the artifact container, copies it to the board with SCP, executes it over SSH, and deletes the remote script afterward. The model, labels, input video, Python runtime, and Edge TPU runtime must therefore exist before Py-TPU starts.
 
 ## 1. Required contract
 
@@ -44,7 +44,7 @@ A read-only audit of the currently configured remote board found:
 | TPU permissions | `/dev/apex_0` owned by `root:apex`; user `mendel` is in group `apex` |
 
 
-This is a known-good configuration, not a claim that every version is a hard minimum. A prior live TPUSG run on it loaded the delegate, processed 160 frames, recorded 702 detections, and produced a readable output video.
+This is a known-good configuration, not a claim that every version is a hard minimum. A prior live Py-TPU run on it loaded the delegate, processed 160 frames, recorded 702 detections, and produced a readable output video.
 
 The validated board inputs have these SHA-256 hashes:
 
@@ -112,7 +112,7 @@ For a fresh original Dev Board:
      "$board":/home/mendel/tinyml_autopilot/models/labelmap.txt
    ```
 
-   The model must already be compiled for the Edge TPU. TPUSG does not compile    models on the board.
+   The model must already be compiled for the Edge TPU. Py-TPU does not compile    models on the board.
 
 ## 4. Run the board preflight
 
@@ -243,7 +243,7 @@ ssh -o BatchMode=yes -o ControlMaster=no -o ControlPath=none \
 The commands above exercise the mounted SSH material and remote interpreter. 
 Exit the temporary container shell after `PASS`.
 
-## 6. Run and verify TPUSG
+## 6. Run and verify Py-TPU
 
 From the repository root on the host:
 
@@ -266,7 +266,7 @@ A successful generated-artifact outcome requires both:
 
 Every rejected remote candidate is retained separately under the same run's `invalid/` directory with an `invalid_attempt-*.py` filename and error metadata. The remote temporary script is still deleted after execution; the classified local copy is the authoritative evidence.
 
-The framework can also complete normally after exhausting its bounded repair budget, in which case `artifact_status=not_generated`. `run-artifact.sh` reports that outcome as PASS. SSH failures, missing board dependencies, and verifier failures are system failures and are reported as FAIL.
+The framework can also complete normally after exhausting its bounded repair budget, in which case `artifact_status=not_generated`. `run-artifact.sh` reports that outcome as RESULT FAIL, FRAMEWORK OK: the task failed, and the framework handled it as designed. SSH failures, missing board dependencies, and verifier failures are framework errors and are reported as FRAMEWORK ERROR.
 
 ## 7. Troubleshooting map
 
