@@ -51,8 +51,10 @@ if outcome.get("artifact_status") == "not_generated":
         raise RuntimeError("Unrecognized no-artifact outcome")
     if not outcome.get("last_error"):
         raise RuntimeError("Retry exhaustion has no recorded final error")
-    if valid_attempts:
-        raise RuntimeError("No-artifact outcome unexpectedly contains valid code")
+    # Multi-step tasks (DP) may validate earlier steps before a later step
+    # exhausts its budget, so only the final archived attempt must be invalid.
+    if attempt_records and attempt_records[-1].get("status") != "invalid":
+        raise RuntimeError("No-artifact outcome does not end with an invalid attempt")
     print(
         "Verified handled outcome: retry budget exhausted; "
         f"retained invalid attempts={len(invalid_attempts)} path={artifact_run}"

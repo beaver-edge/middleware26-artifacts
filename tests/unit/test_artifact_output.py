@@ -117,3 +117,56 @@ def test_retry_exhaustion_is_a_verified_completed_outcome(tmp_path):
     )
     assert completed.returncode == 0
     assert "Verified handled outcome" in completed.stdout
+
+
+def _write_dp_run(tmp_path, statuses):
+    """A DP run whose attempts have the given statuses, in archive order."""
+    marker = tmp_path / "started"
+    marker.touch()
+    run = tmp_path / "artifacts/data/session/run-001-trace"
+    attempts = []
+    for number, status in enumerate(statuses, start=1):
+        code = run / status / f"{status}_attempt-{number:03d}_operation_fake-model.py"
+        code.parent.mkdir(parents=True, exist_ok=True)
+        code.write_text("print('operation')")
+        metadata = code.with_suffix(".py.json")
+        metadata.write_text("{}")
+        attempts.append({
+            "status": status,
+            "code_path": str(code),
+            "metadata_path": str(metadata),
+        })
+    run.joinpath("manifest.json").write_text(json.dumps({
+        "attempts": attempts,
+        "outputs": [],
+    }))
+    outcome = tmp_path / "outcome.json"
+    outcome.write_text(json.dumps({
+        "execution_status": "completed",
+        "artifact_status": "not_generated",
+        "termination": "retry_budget_exhausted",
+        "last_error": "Failed to generate valid code after the max 5 attempts.",
+        "artifact_run_dir": str(run),
+        "valid_attempts": statuses.count("valid"),
+        "invalid_attempts": statuses.count("invalid"),
+    }))
+    return [sys.executable, str(VERIFY), "data", str(marker), str(outcome)]
+
+
+def test_dp_budget_exhausted_after_earlier_valid_operations(tmp_path):
+    # Operations 1-3 validated, operation 4 used its whole repair budget.
+    command = _write_dp_run(tmp_path, ["valid"] * 3 + ["invalid"] * 5)
+    completed = subprocess.run(
+        command, cwd=tmp_path, capture_output=True, text=True
+    )
+    assert completed.returncode == 0, completed.stderr
+    assert "Verified handled outcome" in completed.stdout
+
+
+def test_budget_exhausted_outcome_cannot_end_with_valid_attempt(tmp_path):
+    command = _write_dp_run(tmp_path, ["invalid", "valid"])
+    checked = subprocess.run(
+        command, cwd=tmp_path, capture_output=True, text=True
+    )
+    assert checked.returncode != 0
+    assert "does not end with an invalid attempt" in checked.stderr
