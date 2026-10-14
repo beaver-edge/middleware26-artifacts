@@ -2,7 +2,6 @@ bin/
 /work/
 logs/*
 .git/
-.github/
 tmp/
 docs/callgraphs2/*
 CLAUDE.md
