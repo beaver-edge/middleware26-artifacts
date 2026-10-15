@@ -68,6 +68,12 @@ Besides the per-attempt code, each task keeps three more things on the host:
   left by the last completed operation. Per-attempt scratch directories are
   removed by the framework as before, so compiled Arduino build output is not
   kept (the compiler report is in `workflow.log`).
+  A `work/` file whose bytes are identical to an archived `outputs/valid/` file
+  (the CPU output video) is a hard link to that archived copy: same path, same
+  content, one copy on disk. `work-links.txt` lists them. Editing such a file
+  in place changes the archived copy too, and copying the directory with a tool
+  that does not preserve hard links (`cp -r`, `rsync` without `-H`) simply
+  writes two ordinary copies.
 
 `ENVIRONMENT.txt` in the run directory records the image id, repo digests and
 `org.opencontainers.image.revision` label, the checkout commit, Docker and host

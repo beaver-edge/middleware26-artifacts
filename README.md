@@ -144,7 +144,9 @@ artifact-runs/<timestamp>/
     ├── logs/                           outcome (*.outcome.json), status, resource usage,
     │                                   llm_calls.jsonl (every LLM request and response)
     ├── work/                           what the container leaves behind: DP dataset state,
-    │                                   model_quant.tflite, CPU output video
+    │                                   model_quant.tflite, CPU output video (a hard link
+    │                                   to the archived copy, so it takes no extra space)
+    ├── work-links.txt                  which work/ files are such hard links (when any)
     └── artifacts/<task>/.../<run>/     valid/ and invalid/ code, outputs/, manifest.json
 ```
 

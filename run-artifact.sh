@@ -302,6 +302,22 @@ if [[ " ${tasks[*]} " == *" tpusketch "* ]]; then
 fi
 
 # ---------------------------------------------------------------- 3. the workflow tasks
+dedupe_work() {  # dedupe_work TASK_DIR
+    # A work/ file that is byte-identical to an archived valid output (the ~30 MB CPU
+    # video) becomes a hard link to it: same path, same bytes, one copy on disk.
+    # Done as root in a throwaway container, because the container wrote these files
+    # as root and Linux's protected hardlinks make a plain host-side ln fail.
+    # Best effort and non-destructive: see scripts/container/dedupe-work.sh.
+    local result
+    [[ -d $1/work && -d $1/artifacts && -f $ROOT/scripts/container/dedupe-work.sh ]] || return 0
+    result=$(docker run --rm -i -v "$1:/evidence" "$image" bash -s /evidence \
+        < "$ROOT/scripts/container/dedupe-work.sh" 2>/dev/null) || return 0
+    set -- $result
+    if [[ ${1:-0} -gt 0 ]]; then
+        echo "work/: $1 file(s) are hard links to their archived copy ($(( ${2:-0} / 1048576 )) MB not duplicated; see work-links.txt)"
+    fi
+    return 0
+}
 for task in ${tasks[@]+"${tasks[@]}"}; do
     dir="$out/$task"
     # work/ holds what the container would otherwise destroy: the DP dataset after
@@ -328,6 +344,7 @@ for task in ${tasks[@]+"${tasks[@]}"}; do
     status_seen=$(cat "$dir/logs/status.log" 2>/dev/null | wc -l | tr -d ' ')
     "${run[@]}" "$image" "${command[@]}" 2>&1 | tee "$dir/workflow.log"
     elapsed="$(( (SECONDS - started) / 60 ))m$(( (SECONDS - started) % 60 ))s"
+    dedupe_work "$dir"
 
     # COMPLETE/ERROR is the framework verdict; artifact_status is the task verdict.
     status_line=$(tail -n "+$((status_seen + 1))" "$dir/logs/status.log" 2>/dev/null \
