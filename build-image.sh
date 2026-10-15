@@ -22,6 +22,12 @@ fi
 set -euo pipefail
 cd "$(dirname "$0")"
 tag="beaver-edge-artifact:middleware26"   # the tag ./run-artifact.sh --local-image expects
-docker build -t "$tag" "$@" .
+# The commit is stored in the image label (the build context excludes .git).
+commit=unknown
+if [[ $(git rev-parse --show-toplevel 2>/dev/null) == "$(pwd -P)" ]]; then
+    commit=$(git rev-parse HEAD 2>/dev/null || echo unknown)
+    [[ -n $(git status --porcelain 2>/dev/null) ]] && commit="$commit-dirty"
+fi
+docker build --build-arg GIT_COMMIT="$commit" -t "$tag" "$@" .
 echo
 echo "Built $tag. Next: ./run-artifact.sh --local-image"

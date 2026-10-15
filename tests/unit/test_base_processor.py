@@ -322,3 +322,16 @@ def test_contains_error_indicator(dummy_processor):
     assert dummy_processor.contains_error_indicator(result)
     clean = subprocess.CompletedProcess(["x"], 0, stdout="ok", stderr="")
     assert not dummy_processor.contains_error_indicator(clean)
+
+
+def test_attempt_sidecar_links_to_the_llm_call_and_summary_has_usage(dummy_processor):
+    dummy_processor.invoke_llm("hello", "generation")
+    path = dummy_processor.archive_generated_attempt("print(1)", valid=True)
+    sidecar = json.loads(path.with_suffix(path.suffix + ".json").read_text())
+    assert sidecar["llm_call"] == 1
+    summary = dummy_processor.artifact_summary()
+    assert summary["llm_calls"] == 1
+    assert "cost" not in summary  # the fake provider reports no cost
+    metadata = dummy_processor.llm_strategy.calls[-1][1]
+    assert metadata["trace_id"] == "abcd1234"
+    assert metadata["task"] == "dummy_processor"

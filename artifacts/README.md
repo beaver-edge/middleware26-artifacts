@@ -45,3 +45,30 @@ configured remote output before each TPU validation, preventing an old video
 from falsely validating new code. The complete evidence is retained on the
 host under `artifact-runs/<timestamp>/<task>/artifacts/`, which
 `./run-artifact.sh` bind-mounts so it updates live.
+
+## LLM call log, work directory, and environment
+
+Besides the per-attempt code, each task keeps three more things on the host:
+
+- `<task>/logs/llm_calls.jsonl`: one JSON object per LLM request, in order.
+  `call_index` is the line's number. It holds the provider, model, the full
+  request (`messages`, sampling parameters), the raw response (`content` before
+  any `<think>` stripping, `finish_reason`, reasoning fields when present), the
+  provider's `usage` (token counts, and `cost` when the provider returns it),
+  `latency_seconds`, and the `error` of a failed request. A failed request is
+  recorded too, including a response that has only reasoning and no answer.
+  `latency_seconds` covers the whole call, including the SDK's automatic retries.
+- The `llm_call` field of every `valid_*/invalid_*` sidecar `.json` and of every
+  entry in `manifest.json` is the `call_index` of the request that produced that
+  candidate, so a candidate, its prompt, and its raw response can be joined.
+  The outcome JSON adds `llm_calls`, `prompt_tokens`, `completion_tokens`,
+  `total_tokens`, and `cost` (only when reported).
+- `<task>/work/`: the container's working directory, kept after the run. When a
+  DP run exhausts its repair budget, `work/data/` still holds the dataset as
+  left by the last completed operation. Per-attempt scratch directories are
+  removed by the framework as before, so compiled Arduino build output is not
+  kept (the compiler report is in `workflow.log`).
+
+`ENVIRONMENT.txt` in the run directory records the image id, repo digests and
+`org.opencontainers.image.revision` label, the checkout commit, Docker and host
+versions, the command line, and the model name. It never contains the API key.

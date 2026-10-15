@@ -186,12 +186,15 @@ class BaseProcessor(ABC):
         code_path.write_text(str(code), encoding="utf-8")
 
         relative_code_path = self._artifact_path_for_display(code_path)
+        call_index = getattr(self.llm_strategy, "last_call_index", None)
         record = {
             "attempt": attempt,
             "status": status,
             "label": label or self.get_task_name(short=True),
             "executor": executor,
             "language": "arduino" if is_arduino else "python",
+            # call_index of the logs/llm_calls.jsonl line this candidate came from.
+            "llm_call": call_index if isinstance(call_index, int) else None,
             "code_path": relative_code_path,
             "returncode": returncode,
             "command": command,
@@ -245,7 +248,7 @@ class BaseProcessor(ABC):
 
     def artifact_summary(self):
         """Return paths and counts suitable for the CLI outcome JSON."""
-        return {
+        summary = {
             "artifact_run_dir": self._artifact_path_for_display(self.artifact_run_dir),
             "valid_attempts": sum(
                 attempt["status"] == "valid" for attempt in self._artifact_attempts
@@ -255,6 +258,11 @@ class BaseProcessor(ABC):
             ),
             "archived_outputs": len(self._artifact_outputs),
         }
+        # Request and token totals; cost appears only when the provider returns it.
+        usage = getattr(self.llm_strategy, "usage_totals", None)
+        if isinstance(usage, dict):
+            summary.update({key: value for key, value in usage.items() if value is not None})
+        return summary
 
     def finalize_artifact_manifest(self, outcome):
         """Persist the normalized workflow result beside the attempt evidence."""
@@ -341,7 +349,13 @@ class BaseProcessor(ABC):
         self.logger.propagate = False
 
     def invoke_llm(self, prompts, generation_name):
-        return self.llm_strategy.invoke(prompts, {"generation_name": generation_name})
+        metadata = {
+            "generation_name": generation_name,
+            "task": self.get_task_name(),
+            "trace_id": self.trace_id,
+            "session_id": self.session_id,
+        }
+        return self.llm_strategy.invoke(prompts, metadata)
 
     def log_error(self, error):
         self.logger.error(self.get_session_id() + str(error))

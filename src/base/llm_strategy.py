@@ -1,11 +1,20 @@
 """OpenRouter and deterministic offline language model strategies."""
 import inspect
+import json
 import logging
 import os
 import re
+import time
 from abc import ABC, abstractmethod
+from datetime import datetime, timezone
+from pathlib import Path
 from typing import ClassVar
 from openai import OpenAI
+
+# One JSON object per LLM request; logs/ is bind-mounted by run-artifact.sh.
+CALL_LOG_ENV = "BEAVER_LLM_CALL_LOG"
+DEFAULT_CALL_LOG = "logs/llm_calls.jsonl"
+REASONING_FIELDS = ("reasoning", "reasoning_content", "reasoning_details", "thinking")
 
 class LLMStrategy(ABC):
     """!
@@ -21,7 +30,17 @@ class LLMStrategy(ABC):
         self.parameters = parameters
         self.model_name = model_name
         self.logger = logging.getLogger(self.__class__.__name__)
-        
+        # Request bookkeeping for logs/llm_calls.jsonl and the outcome summary.
+        self.call_count = 0
+        self.last_call_index = None
+        self.usage_totals = {
+            "llm_calls": 0,
+            "prompt_tokens": 0,
+            "completion_tokens": 0,
+            "total_tokens": 0,
+            "cost": None,
+        }
+
     def __init_subclass__(cls, **kwargs):
         super().__init_subclass__(**kwargs)
 
@@ -93,6 +112,118 @@ class LLMStrategy(ABC):
 
         return [{"role": "user", "content": str(prompts)}]
 
+    @classmethod
+    def _plain(cls, value, depth: int = 0):
+        """Best-effort JSON-ready copy of an SDK object (pydantic model, dict, namespace)."""
+        if value is None or isinstance(value, (str, int, float, bool)):
+            return value
+        if depth > 6:
+            return str(value)
+        dump = getattr(value, "model_dump", None)
+        if callable(dump):
+            try:
+                return cls._plain(dump(), depth + 1)
+            except Exception:
+                return str(value)
+        if isinstance(value, dict):
+            return {str(k): cls._plain(v, depth + 1) for k, v in value.items()}
+        if isinstance(value, (list, tuple)):
+            return [cls._plain(v, depth + 1) for v in value]
+        if hasattr(value, "__dict__"):
+            return {
+                k: cls._plain(v, depth + 1)
+                for k, v in vars(value).items()
+                if not k.startswith("_")
+            }
+        return str(value)
+
+    def _begin_call(self):
+        """Number a request before it is sent, so failed requests are numbered too."""
+        self.call_count += 1
+        self.last_call_index = self.call_count
+        return self.call_count, time.monotonic()
+
+    def _record_call(self, index, started, metadata_, request, response=None, text=None, error=None):
+        """Append one request/response record to the call log.
+
+        Observability only: a failure to write the log is reported as a warning
+        and never changes the outcome of the workflow.
+        """
+        try:
+            latency = time.monotonic() - started
+            usage = self._plain(getattr(response, "usage", None))
+            choices = getattr(response, "choices", None) or []
+            choice = choices[0] if choices else None
+            message = getattr(choice, "message", None)
+            reasoning = {
+                name: self._plain(getattr(message, name, None))
+                for name in REASONING_FIELDS
+                if getattr(message, name, None)
+            }
+            entry = {
+                "call_index": index,
+                "timestamp": datetime.now(timezone.utc).isoformat(timespec="milliseconds"),
+                "provider": self.model_provider,
+                "model": self.model_name,
+                "endpoint": self.get_endpoint_url(),
+                "metadata": self._plain(metadata_),
+                "request": self._plain(request),
+                "response": {
+                    "id": self._plain(getattr(response, "id", None)),
+                    "served_model": self._plain(getattr(response, "model", None)),
+                    "finish_reason": self._plain(getattr(choice, "finish_reason", None)),
+                    "content": self._plain(getattr(message, "content", None)),
+                    "reasoning": reasoning or None,
+                    "extracted_text": text,
+                },
+                "usage": usage,
+                "latency_seconds": round(latency, 3),
+                "error": None if error is None else {
+                    "type": type(error).__name__,
+                    "message": str(error),
+                },
+            }
+            self._add_usage(usage)
+            path = Path(os.getenv(CALL_LOG_ENV, DEFAULT_CALL_LOG))
+            path.parent.mkdir(parents=True, exist_ok=True)
+            with path.open("a", encoding="utf-8") as handle:
+                handle.write(
+                    json.dumps(entry, ensure_ascii=False, sort_keys=True, default=str) + "\n"
+                )
+        except Exception as exc:  # never let logging break a run
+            self.logger.warning("Could not record LLM call %s: %s", index, exc)
+
+    def _add_usage(self, usage):
+        self.usage_totals["llm_calls"] += 1
+        if not isinstance(usage, dict):
+            return
+        for key in ("prompt_tokens", "completion_tokens", "total_tokens"):
+            value = usage.get(key)
+            if isinstance(value, int) and not isinstance(value, bool):
+                self.usage_totals[key] += value
+        cost = usage.get("cost")
+        if isinstance(cost, (int, float)) and not isinstance(cost, bool):
+            self.usage_totals["cost"] = (self.usage_totals["cost"] or 0.0) + cost
+
+    def _chat_completion(self, prompts, metadata_, **request_options):
+        """Run one Chat Completions request and append it to the call log."""
+        request = {
+            "model": self.model_name,
+            "messages": self._build_messages(prompts),
+            **request_options,
+            **self.get_generation_parameters(),
+        }
+        index, started = self._begin_call()
+        response = None
+        try:
+            response = self.client.chat.completions.create(**request)
+            text = self._extract_chat_completion_text(response)
+        except Exception as exc:
+            self._record_call(index, started, metadata_, request, response=response, error=exc)
+            raise
+        self._record_call(index, started, metadata_, request, response=response, text=text)
+        return text
+
     def _strip_thinking(self, response_content: str) -> str:
         if response_content.lstrip().startswith("<think>") or "<think>" in response_content:
             return re.sub(
@@ -156,13 +287,9 @@ class OpenRouterStrategy(LLMStrategy):
 
     def invoke(self, prompts, metadata_, model_provider=None):
         self._validate_metadata(metadata_)
-        response = self.client.chat.completions.create(
-            model=self.model_name,
-            messages=self._build_messages(prompts),
-            extra_body=self.REQUEST_EXTRA_BODY,
-            **self.get_generation_parameters(),
+        return self._chat_completion(
+            prompts, metadata_, extra_body=self.REQUEST_EXTRA_BODY
         )
-        return self._extract_chat_completion_text(response)
 
     def get_endpoint_url(self):
         return self.api_base
@@ -188,12 +315,7 @@ class OllamaStrategy(LLMStrategy):
 
     def invoke(self, prompts, metadata_, model_provider=None):
         self._validate_metadata(metadata_)
-        response = self.client.chat.completions.create(
-            model=self.model_name,
-            messages=self._build_messages(prompts),
-            **self.get_generation_parameters(),
-        )
-        return self._extract_chat_completion_text(response)
+        return self._chat_completion(prompts, metadata_)
 
     def get_endpoint_url(self):
         return self.api_base
@@ -225,6 +347,13 @@ class FakeLLMStrategy(LLMStrategy):
         self._validate_metadata(metadata_)
 
         self.calls.append((prompts, metadata_))
+        index, started = self._begin_call()
+        text = self._respond(prompts)
+        request = {"model": self.model_name, "prompts": prompts}
+        self._record_call(index, started, metadata_, request, text=text)
+        return text
+
+    def _respond(self, prompts: list[str] | str) -> str:
         prompt_text = "\n".join(str(prompt) for prompt in prompts) if isinstance(prompts, list) else str(prompts)
         lowered = prompt_text.lower()
         if "single valid json dictionary" in lowered or "suggestion table" in lowered:

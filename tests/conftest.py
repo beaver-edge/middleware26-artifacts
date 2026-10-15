@@ -40,3 +40,4 @@ def dummy_processor(monkeypatch):
 def isolated_generated_artifacts(monkeypatch, tmp_path):
     """Keep per-attempt evidence created by tests out of the repository tree."""
     monkeypatch.setenv("BEAVER_ARTIFACT_ROOT", str(tmp_path / "artifacts"))
+    monkeypatch.setenv("BEAVER_LLM_CALL_LOG", str(tmp_path / "llm_calls.jsonl"))

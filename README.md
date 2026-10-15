@@ -12,7 +12,7 @@ This artifact accompanies *Autopilots Need Parachutes: Lessons Learned from LLM-
 
 The artifact covers the five workflows evaluated in the paper: data processing (**DP**), model conversion with INT8 quantization (**MC**), Arduino sketch generation for a microcontroller (**ArdSG**), Python object-detection sketch generation for CPU execution (**Py-CPU**), and Edge TPU accelerated sketch generation on a Google Coral Dev Board (**Py-TPU**). Everything is packaged as a ready-to-use Docker image (which can also be built locally from the included Dockerfile) and driven by a single entry script. The script supports both an end-to-end run and individual task runs. For every task it reports two separate verdicts, backed by a per-run evidence directory: the task RESULT (PASS if a generated artifact was validated, FAIL if none was within the repair budget) and the FRAMEWORK status (OK if the framework ran the task to a recorded, verified outcome, ERROR otherwise). The four local workflows need only Docker and an LLM API key, and Py-TPU additionally needs SSH access to a prepared Coral board. We provide temporary access to both an API key and our Coral board.
 
-We request the **Artifacts Functional** and **Artifacts Available** badges. The artifact is publicly available at https://github.com/beaver-edge/middleware26-artifacts (MIT license), and the prebuilt image is published on Docker Hub as noahwu/beaver-edge:middleware26. The paper's full source, datasets, and the execution traces and artifacts of the reported evaluation are at https://github.com/beaver-edge/middleware26; this repository packages the framework for evaluation. The goal is to show that the framework installs, runs, and behaves as described in the paper, including its validation-driven repair loop and its handling of runs that never converge. The Functional claim therefore rests on the FRAMEWORK status; a task FAIL is a legitimate result of the LLM under test, and the artifact reports it as FAIL. Because LLM outputs are non-deterministic, the aggregate success rates, token costs, and figures reported in the paper are outside the scope of this artifact and are not expected to be reproduced. This version calls the LLM API directly; the LangChain/Langfuse tracing layer described in §3.2 is not included, so prompts and raw LLM responses are not recorded.
+We request the **Artifacts Functional** and **Artifacts Available** badges. The artifact is publicly available at https://github.com/beaver-edge/middleware26-artifacts (MIT license), and the prebuilt image is published on Docker Hub as noahwu/beaver-edge:middleware26. The paper's full source, datasets, and the execution traces and artifacts of the reported evaluation are at https://github.com/beaver-edge/middleware26; this repository packages the framework for evaluation. The goal is to show that the framework installs, runs, and behaves as described in the paper, including its validation-driven repair loop and its handling of runs that never converge. The Functional claim therefore rests on the FRAMEWORK status; a task FAIL is a legitimate result of the LLM under test, and the artifact reports it as FAIL. Because LLM outputs are non-deterministic, the aggregate success rates, token costs, and figures reported in the paper are outside the scope of this artifact and are not expected to be reproduced. This version calls the LLM API directly; the LangChain/Langfuse tracing layer described in §3.2 is not included. Instead, every LLM request is appended to `logs/llm_calls.jsonl` in the evidence directory: the full prompt, the raw response, finish reason, token usage, and latency (see "Evidence" below).
 
 ## Requirements
 - **Software:** Docker Engine (Linux) or Docker Desktop (macOS/Windows), on `amd64` or `arm64`. All dependencies are in the image.
@@ -137,14 +137,18 @@ Each run writes its evidence to `artifact-runs/<timestamp>/`, updated live:
 ```text
 artifact-runs/<timestamp>/
 ├── SUMMARY.txt                         the table above
+├── ENVIRONMENT.txt                     image id/digest/revision, checkout commit, Docker, host, model
 ├── 0-setup.log  1-self-test.log  2-api-check.log
 └── <task>/
     ├── workflow.log                    full console output
-    ├── logs/                           outcome (*.outcome.json), status, resource usage
+    ├── logs/                           outcome (*.outcome.json), status, resource usage,
+    │                                   llm_calls.jsonl (every LLM request and response)
+    ├── work/                           what the container leaves behind: DP dataset state,
+    │                                   model_quant.tflite, CPU output video
     └── artifacts/<task>/.../<run>/     valid/ and invalid/ code, outputs/, manifest.json
 ```
 
-Every generated candidate is kept, whether it passed validation or not. [`artifacts/README.md`](artifacts/README.md) explains this layout; a copy is included in each run as `HOW-TO-READ-ARTIFACTS.md`. `*.resources.txt` records elapsed time, CPU, and peak memory of the workflow in the container. It does not include resources used on the board or by the API provider.
+Every generated candidate is kept, whether it passed validation or not. [`artifacts/README.md`](artifacts/README.md) explains this layout; a copy is included in each run as `HOW-TO-READ-ARTIFACTS.md`. `*.resources.txt` records elapsed time, CPU, and peak memory of the workflow in the container. It does not include resources used on the board or by the API provider; the token counts, and the provider's cost when it returns one, are in `llm_calls.jsonl` and in each `*.outcome.json`.
 
 ## Major claims
 

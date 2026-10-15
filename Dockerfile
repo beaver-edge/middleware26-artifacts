@@ -37,4 +37,8 @@ COPY README.md example.env ./
 RUN mkdir -p logs tmp work/data work/convert work/ardsketch \
     work/pysketch/generated work/tpusketch/generated \
     && python -m pip check
+# Last on purpose: a different commit changes only this metadata, not a cached layer.
+# run-artifact.sh records it in ENVIRONMENT.txt as image_revision.
+ARG GIT_COMMIT=unknown
+LABEL org.opencontainers.image.revision="${GIT_COMMIT}"
 CMD ["bash", "scripts/container/run-task.sh", "all"]

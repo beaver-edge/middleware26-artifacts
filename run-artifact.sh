@@ -55,6 +55,7 @@ ssh_dir=
 no_tpu=0
 out=
 tasks=()
+command_line="$*"   # for ENVIRONMENT.txt; the loop below shifts the arguments away
 while [[ $# -gt 0 ]]; do
     case "$1" in
         --local-image) use_local=1; image=$LOCAL_IMAGE ;;
@@ -187,6 +188,33 @@ elif ! docker pull "$image" 2>&1 | tee "$out/0-setup.log"; then
 fi
 record "0 setup" PASS - "image ready: $image"
 
+# ENVIRONMENT.txt: exactly what produced this evidence. It never contains .env
+# values; the model name is added after the credentials step.
+inspect_value() { docker image inspect --format "$1" "$image" 2>/dev/null || echo unknown; }
+write_environment() {
+    local checkout=unknown dirty=
+    if [[ $(git -C "$ROOT" rev-parse --show-toplevel 2>/dev/null) == "$(pwd -P)" ]]; then
+        checkout=$(git -C "$ROOT" rev-parse HEAD 2>/dev/null || echo unknown)
+        [[ -n $(git -C "$ROOT" status --porcelain 2>/dev/null) ]] && dirty=" (working tree has uncommitted changes)"
+    fi
+    {
+        echo "BEAVER-EDGE evaluation environment"
+        echo "started_utc:        $(date -u +%Y-%m-%dT%H:%M:%SZ)"
+        echo "command:            ./run-artifact.sh $command_line"
+        echo "provider:           $provider"
+        echo "image_ref:          $image"
+        echo "image_id:           $(inspect_value '{{.Id}}')"
+        echo "image_repo_digests: $(inspect_value '{{join .RepoDigests ", "}}')"
+        echo "image_created:      $(inspect_value '{{.Created}}')"
+        echo "image_platform:     $(inspect_value '{{.Os}}/{{.Architecture}}')"
+        echo "image_revision:     $(inspect_value '{{index .Config.Labels "org.opencontainers.image.revision"}}')"
+        echo "checkout_commit:    $checkout$dirty"
+        echo "docker:             client $(docker version --format '{{.Client.Version}}' 2>/dev/null || echo unknown), server $(docker version --format '{{.Server.Version}} {{.Server.Os}}/{{.Server.Arch}}' 2>/dev/null || echo unknown)"
+        echo "host:               $(uname -srm 2>/dev/null || echo unknown)"
+    } > "$out/ENVIRONMENT.txt"
+}
+write_environment
+
 # ---------------------------------------------------------------- 0b. credentials
 unlock_credentials() {  # decrypt with the image's OpenSSL, so the host needs nothing but Docker
     local password=${BEAVER_EDGE_CREDENTIALS_PASSWORD:-} tarball
@@ -220,6 +248,9 @@ else
     record "0 credentials" FAIL - "missing .env - run: cp example.env .env, then add your LLM API key"
     finish
 fi
+# Only the model name is copied out of .env, never a key.
+case "$provider" in openrouter) model_variable=OPENROUTER_MODEL_NAME ;; *) model_variable=OLLAMA_MODEL_NAME ;; esac
+echo "model:              $(sed -n "s/^$model_variable=//p" .env 2>/dev/null | head -n 1 | tr -d "\"'\r")" >> "$out/ENVIRONMENT.txt"
 if [[ -z $ssh_dir && $no_tpu -eq 0 && -d eval-ssh ]]; then
     ssh_dir=$ROOT/eval-ssh
 fi
@@ -273,11 +304,17 @@ fi
 # ---------------------------------------------------------------- 3. the workflow tasks
 for task in ${tasks[@]+"${tasks[@]}"}; do
     dir="$out/$task"
-    mkdir -p "$dir/logs" "$dir/artifacts"
+    # work/ holds what the container would otherwise destroy: the DP dataset after
+    # every completed operation, model_quant.tflite, the CPU output video. The
+    # subdirectories are created here because the mount hides the image's own.
+    mkdir -p "$dir/logs" "$dir/artifacts" \
+        "$dir/work/data" "$dir/work/convert" "$dir/work/ardsketch" \
+        "$dir/work/pysketch/generated" "$dir/work/tpusketch/generated"
     run=(docker run --rm --name "beaver-edge-$task-$stamp-$$"
         -v "$ROOT/.env:/artifact/.env:ro"
         -v "$dir/logs:/artifact/logs"
-        -v "$dir/artifacts:/artifact/artifacts")
+        -v "$dir/artifacts:/artifact/artifacts"
+        -v "$dir/work:/artifact/work")
     command=(bash scripts/container/run-task.sh --provider "$provider" "$task")
     if [[ $task == tpusketch ]]; then
         run+=(-v "$ssh_dir:/run/evaluation-ssh:ro" -e REMOTE_EXECUTION_ENABLED=true)
@@ -297,7 +334,10 @@ for task in ${tasks[@]+"${tasks[@]}"}; do
         | grep -E "^(COMPLETE|ERROR) $task " | tail -n 1)
     outcome_file=${status_line#*outcome_file=}
     outcome_file="$dir/${outcome_file%% *}"
+    llm_calls=$(json_int llm_calls "$outcome_file")
+    llm_tokens=$(json_int total_tokens "$outcome_file")
     attempts="attempts kept: $(json_int valid_attempts "$outcome_file") valid, $(json_int invalid_attempts "$outcome_file") invalid"
+    attempts="$attempts${llm_calls:+, $llm_calls LLM calls}${llm_tokens:+, $llm_tokens tokens}"
     if [[ $status_line == COMPLETE*artifact_status=generated* ]]; then
         record "$(task_label "$task")" PASS OK "artifact generated and verified; $attempts [$elapsed]"
     elif [[ $status_line == COMPLETE*artifact_status=not_generated* ]]; then

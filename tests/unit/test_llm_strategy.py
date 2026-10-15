@@ -85,3 +85,96 @@ def test_ollama_uses_its_own_configuration(monkeypatch):
     assert strategy.model_name == "reasoning-model:latest"
     assert constructor.call_args.kwargs["base_url"] == "https://ollama.example/v1"
     assert constructor.call_args.kwargs["api_key"] == "ollama-key"
+
+
+def _call_log(tmp_path):
+    import json
+    path = tmp_path / "llm_calls.jsonl"
+    return [json.loads(line) for line in path.read_text().splitlines()]
+
+
+def test_live_call_is_logged_with_request_response_and_usage(monkeypatch, tmp_path):
+    monkeypatch.setenv("OPENROUTER_API_KEY", "secret-key-value")
+    strategy = OpenRouterStrategy("vendor/model", parameters=True)
+    strategy.client = Mock()
+    strategy.client.chat.completions.create.return_value = SimpleNamespace(
+        id="gen-1",
+        model="vendor/model-served",
+        choices=[SimpleNamespace(
+            finish_reason="stop",
+            message=SimpleNamespace(content="<think>x</think>answer"),
+        )],
+        usage=SimpleNamespace(
+            prompt_tokens=11, completion_tokens=7, total_tokens=18, cost=0.0004
+        ),
+    )
+    assert strategy.invoke(["ctx", "rules", "task"], {"generation_name": "g"}) == "answer"
+    (entry,) = _call_log(tmp_path)
+    assert entry["call_index"] == 1
+    assert entry["provider"] == "openrouter"
+    assert entry["metadata"] == {"generation_name": "g"}
+    assert entry["request"]["messages"][0] == {"role": "system", "content": "ctx\nrules"}
+    assert entry["request"]["extra_body"] == {"reasoning": {"enabled": False}}
+    assert entry["response"]["content"] == "<think>x</think>answer"  # raw, before stripping
+    assert entry["response"]["extracted_text"] == "answer"
+    assert entry["response"]["finish_reason"] == "stop"
+    assert entry["usage"]["total_tokens"] == 18
+    assert entry["error"] is None
+    assert "secret-key-value" not in (tmp_path / "llm_calls.jsonl").read_text()
+    assert strategy.usage_totals == {
+        "llm_calls": 1, "prompt_tokens": 11, "completion_tokens": 7,
+        "total_tokens": 18, "cost": 0.0004,
+    }
+
+
+def test_failed_call_is_logged_and_still_raises(monkeypatch, tmp_path):
+    monkeypatch.setenv("OPENROUTER_API_KEY", "test-key")
+    strategy = OpenRouterStrategy("vendor/model")
+    strategy.client = Mock()
+    strategy.client.chat.completions.create.return_value = SimpleNamespace(
+        choices=[SimpleNamespace(
+            finish_reason="length",
+            message=SimpleNamespace(content=None, reasoning="private reasoning"),
+        )],
+        usage=SimpleNamespace(prompt_tokens=5, completion_tokens=100, total_tokens=105),
+    )
+    with pytest.raises(ValueError, match="not a final answer"):
+        strategy.invoke("hello", {})
+    (entry,) = _call_log(tmp_path)
+    assert entry["error"]["type"] == "ValueError"
+    assert entry["response"]["reasoning"] == {"reasoning": "private reasoning"}
+    assert entry["usage"]["completion_tokens"] == 100
+    assert strategy.last_call_index == 1
+    assert strategy.usage_totals["cost"] is None
+
+
+def test_api_exception_is_logged(monkeypatch, tmp_path):
+    monkeypatch.setenv("OPENROUTER_API_KEY", "test-key")
+    strategy = OpenRouterStrategy("vendor/model")
+    strategy.client = Mock()
+    strategy.client.chat.completions.create.side_effect = TimeoutError("timed out")
+    with pytest.raises(TimeoutError):
+        strategy.invoke("hello", {})
+    (entry,) = _call_log(tmp_path)
+    assert entry["error"] == {"type": "TimeoutError", "message": "timed out"}
+    assert entry["response"]["content"] is None
+    assert strategy.usage_totals["llm_calls"] == 1
+
+
+def test_unwritable_call_log_never_breaks_a_run(monkeypatch, tmp_path):
+    blocker = tmp_path / "not-a-directory"
+    blocker.write_text("file")
+    monkeypatch.setenv("BEAVER_LLM_CALL_LOG", str(blocker / "llm_calls.jsonl"))
+    strategy = FakeLLMStrategy()
+    assert "copy_dataset" in strategy.invoke("suggestion table", {})
+    assert strategy.last_call_index == 1
+
+
+def test_fake_strategy_numbers_and_logs_calls(tmp_path):
+    strategy = FakeLLMStrategy()
+    strategy.invoke("suggestion table", {"generation_name": "a"})
+    strategy.invoke("python", {"generation_name": "b"})
+    entries = _call_log(tmp_path)
+    assert [e["call_index"] for e in entries] == [1, 2]
+    assert [e["metadata"]["generation_name"] for e in entries] == ["a", "b"]
+    assert strategy.usage_totals["llm_calls"] == 2
