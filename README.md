@@ -50,20 +50,20 @@ This pulls the prebuilt image, unpacks the credentials, and runs all checks and 
 
 ## Expected output
 
-The script ends with a summary like this (from a real run; task results and timings vary between runs):
+The script ends with a summary like this (from real runs; task results and timings vary between runs):
 
 ```text
 =========================== BEAVER-EDGE evaluation summary ===========================
 STEP / TASK          RESULT   FRAMEWORK  DETAILS
 0 setup              PASS     -          image ready: noahwu/beaver-edge:middleware26@sha256:...
 0 credentials        PASS     -          unpacked .env and eval-ssh/ from credentials.tar.gz.enc
-1 self-test          PASS     -          offline unit tests: 100 passed, 2 skipped in 5.19s
+1 self-test          PASS     -          offline unit tests: 109 passed, 2 skipped in 3.96s
 2 api-check          PASS     -          openrouter API reachable and returns parseable JSON
 2b board-check       PASS     -          Coral board reachable over SSH, Edge TPU and inputs present
-DP (data)            FAIL     OK         no valid artifact: repair budget exhausted; attempts kept: 3 valid, 5 invalid [1m10s]
-MC (convert)         PASS     OK         artifact generated and verified; attempts kept: 1 valid, 2 invalid [0m27s]
-ArdSG (ardsketch)    PASS     OK         artifact generated and verified; attempts kept: 1 valid, 2 invalid [8m29s]
-Py-CPU (pysketch)    PASS     OK         artifact generated and verified; attempts kept: 1 valid, 1 invalid [2m41s]
+DP (data)            FAIL     OK         no valid artifact: repair budget exhausted; attempts kept: 6 valid, 8 invalid, 15 LLM calls, 30188 tokens [1m42s]
+MC (convert)         PASS     OK         artifact generated and verified; attempts kept: 1 valid, 2 invalid, 3 LLM calls, 7194 tokens [0m24s]
+ArdSG (ardsketch)    PASS     OK         artifact generated and verified; attempts kept: 1 valid, 3 invalid, 5 LLM calls, 20609 tokens [2m31s]
+Py-CPU (pysketch)    PASS     OK         artifact generated and verified; attempts kept: 1 valid, 2 invalid, 3 LLM calls, 14524 tokens [1m4s]
 Py-TPU (tpusketch)   FAIL     OK         no valid artifact: repair budget exhausted; attempts kept: 0 valid, 2 invalid [4m0s]
 --------------------------------------------------------------------------------------
 CHECKS:    PASS
