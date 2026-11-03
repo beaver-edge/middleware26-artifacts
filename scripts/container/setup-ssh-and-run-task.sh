@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# Runs INSIDE the container (TPUSG only). Copy only evaluator-provided SSH runtime files into the ephemeral container layer.
+# Runs INSIDE the container (Py-TPU only). Copy only evaluator-provided SSH runtime files into the ephemeral container layer.
 #   setup-ssh-and-run-task.sh [--provider P] TASK...   then run the task(s)
 #   setup-ssh-and-run-task.sh --check-board            then run only the board preflight
 set -euo pipefail
