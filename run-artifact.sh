@@ -42,7 +42,7 @@ case "$(uname -s 2>/dev/null)" in
     MINGW*|MSYS*|CYGWIN*) echo "Note: Git Bash/MSYS detected. If the container mounts fail, run this script from WSL 2." >&2 ;;
 esac
 
-PUBLISHED_IMAGE="noahwu/beaver-edge:middleware26@sha256:a317b940a493e208ee3d30893344317d6a5fff85603f299e5b4ca17d67caf5c6"
+PUBLISHED_IMAGE="noahwu/beaver-edge:middleware26@sha256:5f10942a1a71cf2c1eca3e4c6c1d6d9014e1860afc40ff62ebfcc86498407106"
 LOCAL_IMAGE="beaver-edge-artifact:middleware26"   # tag produced by ./build-image.sh
 SEALED_CREDENTIALS=credentials.tar.gz.enc          # made by scripts/maintainer/eval-access.sh seal
 
