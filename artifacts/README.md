@@ -1,6 +1,6 @@
 # Generated artifact evidence
 
-This directory is the canonical, evaluator-facing result of running the five
+This directory is the canonical result of running the five
 framework tasks. Immutable source material lives under `inputs/<task>/`, while
 disposable generated-code and output workspaces live under `work/<task>/`.
 Neither location is the authoritative evidence tree.

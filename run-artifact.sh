@@ -1,16 +1,16 @@
 #!/usr/bin/env bash
-# BEAVER-EDGE artifact evaluation — the single entry point for reviewers.
+# BEAVER-EDGE artifact — the single entry point: setup checks, then the five tasks.
 #
 #   ./run-artifact.sh                      pull image, self-test, API check, DP/MC/ArdSG/Py-CPU,
-#                                          plus Py-TPU on the authors' Coral board when eval-ssh/ exists
+#                                          plus Py-TPU when board access is given (eval-ssh/ or --tpu DIR)
 #   ./run-artifact.sh data convert         run only the listed tasks (after the checks)
 #   ./run-artifact.sh --no-tpu             skip Py-TPU even when board access is available
-#   ./run-artifact.sh --tpu DIR            use another SSH directory for Py-TPU (e.g. your own board)
+#   ./run-artifact.sh --tpu DIR            use an SSH directory for Py-TPU (e.g. your own board)
 #   ./run-artifact.sh --local-image        use the image built by ./build-image.sh
 #
-# Credentials: when .env is missing and credentials.tar.gz.enc is present, the
-# script asks for the password from the submission system (or reads
-# BEAVER_EDGE_CREDENTIALS_PASSWORD) and unpacks .env and eval-ssh/.
+# Credentials: put your LLM API key in .env (cp example.env .env). The sealed
+# credentials.tar.gz.enc held the temporary access for the artifact evaluation; it
+# is unpacked only when .env is missing and BEAVER_EDGE_CREDENTIALS_PASSWORD is set.
 #
 # Each check prints PASS or FAIL. Each task gets two independent verdicts:
 #   RESULT     PASS  = the generated artifact passed validation and its outputs were verified
@@ -61,7 +61,7 @@ while [[ $# -gt 0 ]]; do
         --local-image) use_local=1; image=$LOCAL_IMAGE ;;
         --image) image=${2:?--image needs a value}; shift ;;
         --provider) provider=${2:?--provider needs openrouter or ollama}; shift ;;
-        --tpu) ssh_dir=${2:?--tpu needs the evaluation SSH directory}; shift ;;
+        --tpu) ssh_dir=${2:?--tpu needs the SSH directory for your Coral board}; shift ;;
         --no-tpu) no_tpu=1 ;;
         --out) out=${2:?--out needs a directory}; shift ;;
         -h|--help) usage; exit 0 ;;
@@ -217,12 +217,7 @@ write_environment
 
 # ---------------------------------------------------------------- 0b. credentials
 unlock_credentials() {  # decrypt with the image's OpenSSL, so the host needs nothing but Docker
-    local password=${BEAVER_EDGE_CREDENTIALS_PASSWORD:-} tarball
-    if [[ -z $password ]]; then
-        [[ -t 0 ]] || { echo "no password: set BEAVER_EDGE_CREDENTIALS_PASSWORD" > "$out/0-credentials.log"; return 1; }
-        read -rsp "Password for $SEALED_CREDENTIALS (from the submission system): " password
-        echo
-    fi
+    local password=$BEAVER_EDGE_CREDENTIALS_PASSWORD tarball   # the caller has checked that it is set
     tarball=$(mktemp)
     if BEAVER_EDGE_CREDENTIALS_PASSWORD=$password docker run --rm -i -e BEAVER_EDGE_CREDENTIALS_PASSWORD "$image" \
             openssl enc -d -aes-256-cbc -pbkdf2 -iter 600000 -pass env:BEAVER_EDGE_CREDENTIALS_PASSWORD \
@@ -237,11 +232,11 @@ unlock_credentials() {  # decrypt with the image's OpenSSL, so the host needs no
 }
 if [[ -f .env ]]; then
     record "0 credentials" PASS - "using the existing .env"
-elif [[ -f $SEALED_CREDENTIALS ]]; then
+elif [[ -f $SEALED_CREDENTIALS && -n ${BEAVER_EDGE_CREDENTIALS_PASSWORD:-} ]]; then
     if unlock_credentials; then
         record "0 credentials" PASS - "unpacked .env and eval-ssh/ from $SEALED_CREDENTIALS"
     else
-        record "0 credentials" FAIL - "could not decrypt $SEALED_CREDENTIALS - wrong or missing password (see 0-credentials.log)"
+        record "0 credentials" FAIL - "could not decrypt $SEALED_CREDENTIALS - wrong BEAVER_EDGE_CREDENTIALS_PASSWORD (see 0-credentials.log)"
         finish
     fi
 else
