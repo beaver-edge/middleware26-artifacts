@@ -4,7 +4,7 @@ Artifact for the paper **Autopilots Need Parachutes: Lessons Learned from LLM-Au
 
 BEAVER-EDGE uses an LLM to generate, validate, and automatically repair code for five embedded-ML pipeline tasks. This package runs all five workflows in Docker with a single script and reports, for each one, the task result and, separately, the framework status. The paper claims this artifact supports are listed under [Major claims](#major-claims).
 
-**Submitted to the Middleware 2026 artifact evaluation for the Artifacts Functional and Artifacts Available badges.** The package is publicly available and shows that the workflows install and run as the paper describes. It does not reproduce the paper's aggregate measurements, tables, or figures, which come from many repeated experiments.
+**Submitted to the Middleware 2026 artifact evaluation for the Artifacts Functional and Artifacts Available badges.** The package is publicly available and shows that the workflows install and run as the paper describes. It does not reproduce the paper's aggregate measurements, tables, or figures, which come from many repeated experiments; the original experimental data and results reported in the paper can be found in [this repository](https://github.com/beaver-edge/middleware26). 
 
 ## Abstract
 
